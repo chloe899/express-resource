@@ -14,7 +14,7 @@ var express = require('express')
     , methods = require('methods')
     , debug = require('debug')('express-resource')
     , lingo = require('lingo')
-    , router = express.Router
+    , router = express.Router()
     , en = lingo.en;
 
 /**
