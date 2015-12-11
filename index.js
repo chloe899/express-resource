@@ -38,6 +38,28 @@ var orderedActions = [
 
 module.exports = function(app){
   Resource.prototype.app = app;
+
+
+  /**
+   * Define a resource with the given `name` and `actions`.
+   *
+   * @param {String|Object} name or actions
+   * @param {Object} actions
+   * @return {Resource}
+   * @api public
+   */
+
+  app.resource = function(name, actions, opts){
+    var options = actions || {};
+    if ('object' == typeof name) actions = name, name = null;
+    if (options.id) actions.id = options.id;
+    this.resources = this.resources || {};
+    if (!actions) return this.resources[name] || new Resource(name, null, this);
+    for (var key in opts) options[key] = opts[key];
+    var res = this.resources[name] = new Resource(name, actions, this);
+    return res;
+  };
+
   return Resource;
 };
 
@@ -281,23 +303,3 @@ methods.concat(['del', 'all']).forEach(function(method){
     return this;
   }
 });
-
-/**
- * Define a resource with the given `name` and `actions`.
- *
- * @param {String|Object} name or actions
- * @param {Object} actions
- * @return {Resource}
- * @api public
- */
-
-app.resource = function(name, actions, opts){
-  var options = actions || {};
-  if ('object' == typeof name) actions = name, name = null;
-  if (options.id) actions.id = options.id;
-  this.resources = this.resources || {};
-  if (!actions) return this.resources[name] || new Resource(name, null, this);
-  for (var key in opts) options[key] = opts[key];
-  var res = this.resources[name] = new Resource(name, actions, this);
-  return res;
-};
