@@ -11,18 +11,18 @@
  */
 
 var express = require('express')
-  , methods = require('methods')
-  , debug = require('debug')('express-resource')
-  , lingo = require('lingo')
-  , app = express.application
-  , en = lingo.en;
+    , methods = require('methods')
+    , debug = require('debug')('express-resource')
+    , lingo = require('lingo')
+    , router = express.Router
+    , en = lingo.en;
 
 /**
  * Pre-defined action ordering.
  */
 
 var orderedActions = [
-   'index'    //  GET   /
+  'index'    //  GET   /
   , 'new'     //  GET   /new
   , 'create'  //  POST  /
   , 'show'    //  GET   /:id
@@ -36,7 +36,10 @@ var orderedActions = [
  * Expose `Resource`.
  */
 
-module.exports = Resource;
+module.exports = function(app){
+  Resource.prototype.app = app;
+  return Resource;
+};
 
 /**
  * Initialize a new `Resource` with the given `name` and `actions`.
@@ -51,6 +54,7 @@ function Resource(name, actions, app) {
   this.name = name;
   this.app = app;
   this.routes = {};
+  this.router = router;
   actions = actions || {};
   this.base = actions.base || '/';
   if ('/' != this.base[this.base.length - 1]) this.base += '/';
@@ -63,7 +67,7 @@ function Resource(name, actions, app) {
     key = orderedActions[i];
     if (actions[key]) this.mapDefaultAction(key, actions[key]);
   }
-
+  app.use(router);
   // auto-loader
   if (actions.load) this.load(actions.load);
 };
@@ -78,10 +82,10 @@ function Resource(name, actions, app) {
 
 Resource.prototype.load = function(fn){
   var self = this
-    , id = this.id;
+      , id = this.id;
 
   this.loadFunction = fn;
-  this.app.param(this.id, function(req, res, next){
+  this.router.param(this.id, function(req, res, next){
     function callback(err, obj){
       if (err) return next(err);
       // TODO: ideally we should next() passed the
@@ -90,7 +94,7 @@ Resource.prototype.load = function(fn){
       req[id] = obj;
       next();
     };
-    
+
     // Maintain backward compatibility
     if (2 == fn.length) {
       fn(req.params[id], callback);
@@ -111,8 +115,8 @@ Resource.prototype.load = function(fn){
 
 Resource.prototype.__defineGetter__('defaultId', function(){
   return this.name
-    ? en.singularize(this.name.split('/').pop())
-    : 'id';
+      ? en.singularize(this.name.split('/').pop())
+      : 'id';
 });
 
 /**
@@ -127,7 +131,7 @@ Resource.prototype.__defineGetter__('defaultId', function(){
 
 Resource.prototype.map = function(method, path, fn){
   var self = this
-    , orig = path;
+      , orig = path;
 
   if (method instanceof Resource) return this.add(method);
   if ('function' == typeof path) fn = path, path = '';
@@ -135,6 +139,9 @@ Resource.prototype.map = function(method, path, fn){
   if ('/' == path[0]) path = path.substr(1);
   else path = path ? this.param + '/' + path : this.param;
   method = method.toLowerCase();
+  if(method == "del"){
+    method = "delete";
+  }
 
   // setup route pathname
   var route = this.base + (this.name || '');
@@ -144,14 +151,14 @@ Resource.prototype.map = function(method, path, fn){
 
   // register the route so we may later remove it
   (this.routes[method] = this.routes[method] || {})[route] = {
-      method: method
+    method: method
     , path: route
     , orig: orig
     , fn: fn
   };
 
   // apply the route
-  this.app[method](route, function(req, res, next){
+  this.router[method](route, function(req, res, next){
     req.format = req.params.format || req.format || self.format;
     if (req.format) res.type(req.format);
     if ('object' == typeof fn) {
@@ -178,27 +185,46 @@ Resource.prototype.map = function(method, path, fn){
  */
 
 Resource.prototype.add = function(resource){
-  var app = this.app
-    , routes
-    , route;
+  var router = this.router
+      , routes
+      , route;
 
   // relative base
   resource.base = this.base
-    + (this.name ? this.name + '/': '')
-    + this.param + '/';
+      + (this.name ? this.name + '/': '')
+      + this.param + '/';
+
+  /*var appRoutes = this.router.stack;
+
+   for (var method in resource.routes) {
+   routes = resource.routes[method];
+   for (var key in routes) {
+   route = routes[key];
+   delete routes[key];
+   if (method == 'del') method = 'delete';
+   appRoutes.forEach(function(layer, i){
+   if (layer.route && layer.route.path == key && key) {
+   appRoutes.splice(i, 1);
+   log.debug("remove keys is %s", key);
+   }
+   });
+   resource.map(route.method, route.orig, route.fn);
+   }
+   }*/
 
   // re-define previous actions
+  var appRoutes = this.router.stack;
   for (var method in resource.routes) {
     routes = resource.routes[method];
     for (var key in routes) {
       route = routes[key];
       delete routes[key];
       if (method == 'del') method = 'delete';
-      app.routes[method].forEach(function(route, i){
-        if (route.path == key) {
-          app.routes[method].splice(i, 1);
+      appRoutes.forEach(function(layer, i){
+        if (layer.route && layer.route.path == key && key) {
+          appRoutes.splice(i, 1);
         }
-      })
+      });
       resource.map(route.method, route.orig, route.fn);
     }
   }
@@ -250,7 +276,7 @@ Resource.prototype.mapDefaultAction = function(key, fn){
 methods.concat(['del', 'all']).forEach(function(method){
   Resource.prototype[method] = function(path, fn){
     if ('function' == typeof path
-      || 'object' == typeof path) fn = path, path = '';
+        || 'object' == typeof path) fn = path, path = '';
     this.map(method, path, fn);
     return this;
   }

@@ -1,7 +1,7 @@
 # Express Resource
 
   express-resource provides resourceful routing to express. For Express 2.x
-  use a version __below__ 1.0, for Express 3.x use 1.x.
+  use a version __below__ 1.0, for Express 3.x use 1.x. 2.0 for 4.x
 
 ## Installation
 
